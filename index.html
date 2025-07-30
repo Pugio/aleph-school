@@ -1,0 +1,956 @@
+<!-- I want to create a web page (no react) which displays a zoomed out picture of the torah. I want to have what looks like a torah scroll (as seen in the sample photo), but with ALL the text of the torah rendered as tiny lines. We don't need to show actual characters, just little columns of lines that represent the columns of text in the torah. These columns should be stacked into 5 rows - one row for each of the books of the torah. Something like
+
+|                                          |
++------------------------------------------+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-- --- --- --- --- --- --- --- --- --- ---+
++-------------------------------------------+
+|                                          | -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torah Scroll Visualization</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #8b4513, #a0522d);
+        font-family: Arial, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .torah-container {
+        position: relative;
+        background: #f5f5dc;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        padding: 40px 60px;
+        max-width: 1200px;
+        width: 90%;
+      }
+
+      .scroll-handles {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 30px;
+        background: linear-gradient(45deg, #8b4513, #a0522d);
+        border-radius: 15px;
+        box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+      }
+
+      .scroll-handles::before {
+        content: '';
+        position: absolute;
+        top: 10px;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 8px;
+        background: #654321;
+        border-radius: 4px;
+      }
+
+      .left-handle {
+        left: -15px;
+      }
+
+      .right-handle {
+        right: -15px;
+      }
+
+      .torah-text {
+        background: #fffef7;
+        border: 2px solid #d2b48c;
+        border-radius: 5px;
+        padding: 30px;
+        min-height: 600px;
+      }
+
+      .book-section {
+        margin-bottom: 40px;
+        position: relative;
+      }
+
+      .book-section:last-child {
+        margin-bottom: 0;
+      }
+
+      .book-title {
+        position: absolute;
+        left: -25px;
+        top: 50%;
+        transform: translateY(-50%) rotate(-90deg);
+        font-size: 12px;
+        font-weight: bold;
+        color: #8b4513;
+        white-space: nowrap;
+      }
+
+      .text-columns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        justify-content: flex-start;
+        align-items: flex-start;
+        direction: rtl;
+        unicode-bidi: embed;
+      }
+
+      .column {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3px;
+        min-height: 120px;
+        margin-right: 3px;
+        width: auto;
+        min-width: 25px;
+        max-width: 50px;
+        padding: 1px;
+        border-right: 1px solid #e0d5c7;
+      }
+
+      .text-fragment {
+        font-size: 2px;
+        line-height: 1.1;
+        color: #2f2f2f;
+        font-family: 'ShlomosemiStam', 'Times New Roman', serif;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        direction: rtl;
+        unicode-bidi: embed;
+        margin-bottom: 0.3px;
+        height: auto;
+        min-height: 4px;
+        padding: 0.2px 1px;
+        text-align: right;
+      }
+
+      /* Hebrew font styling */
+      .text-fragment {
+        font-feature-settings: 'kern' 1, 'liga' 1;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Loading state styling */
+      .book-section .text-columns div:only-child {
+        text-align: center;
+        padding: 20px;
+        font-style: italic;
+      }
+
+      /* Ensure Hebrew text renders properly at tiny sizes */
+      @font-face {
+        font-family: 'ShlomosemiStam';
+        src: url('assets/fonts/ShlomosemiStam.ttf') format('truetype');
+        font-display: swap;
+      }
+
+      /* Highlight styling */
+      .highlight {
+        background-color: blue; /* #ffff00;*/
+        color: white;
+        /* padding: 0px 1px; */
+        border-radius: 1px;
+      }
+
+      .title {
+        text-align: center;
+        margin-bottom: 20px;
+        color: #8b4513;
+        font-size: 24px;
+        font-weight: bold;
+      }
+
+      /* Highlight button styling */
+      .highlight-controls {
+        text-align: center;
+        margin-bottom: 15px;
+      }
+
+      .highlight-btn {
+        background-color: #8b4513;
+        color: #f5f5dc;
+        border: 2px solid #654321;
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+      }
+
+      .highlight-btn:hover {
+        background-color: #654321;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+      }
+
+      .highlight-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Progress bar styling */
+      .progress-container {
+        width: 100%;
+        height: 25px;
+        background-color: #e0d5c7;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 15px;
+        position: relative;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #4caf50, #45a049);
+        width: 0%;
+        transition: width 0.8s ease-in-out;
+        border-radius: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .progress-bar::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.4),
+          transparent
+        );
+        animation: shimmer 2s infinite;
+      }
+
+      @keyframes shimmer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+
+      .progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        font-weight: bold;
+        color: #8b4513;
+        text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+        z-index: 10;
+      }
+
+      /* Highlighted words display */
+      .highlighted-words {
+        background-color: #f9f7f4;
+        border: 1px solid #d2b48c;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        color: #8b4513;
+        min-height: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .highlighted-words-label {
+        font-weight: bold;
+        margin-right: 8px;
+        white-space: nowrap;
+      }
+
+      .highlighted-word-tag {
+        background-color: #e8e2d5;
+        border: 1px solid #d2b48c;
+        border-radius: 15px;
+        padding: 4px 10px;
+        font-size: 12px;
+        color: #6b4423;
+        font-weight: 500;
+        direction: rtl;
+        unicode-bidi: embed;
+      }
+
+      .highlighted-words.empty {
+        font-style: italic;
+        color: #999;
+        justify-content: center;
+      }
+
+      /* Zoom controls */
+      .zoom-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        z-index: 1000;
+      }
+
+      .zoom-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid #8b4513;
+        background-color: #f5f5dc;
+        color: #8b4513;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+
+      .zoom-btn:hover {
+        background-color: #8b4513;
+        color: #f5f5dc;
+        transform: scale(1.1);
+      }
+
+      .zoom-btn:active {
+        transform: scale(0.95);
+      }
+
+      .zoom-level {
+        background-color: rgba(139, 69, 19, 0.9);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        text-align: center;
+        min-width: 60px;
+        font-weight: bold;
+      }
+
+      /* Zoomable container */
+      .zoomable {
+        transition: transform 0.3s ease;
+        transform-origin: center top;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="torah-container">
+      <div class="scroll-handles left-handle"></div>
+      <div class="scroll-handles right-handle"></div>
+
+      <div class="title">Torah Scroll</div>
+
+      <!-- <div class="highlight-controls">
+        <button
+          class="highlight-btn"
+          id="auto-highlight-btn"
+          onclick="window.timedHighlightNextRoot(1000)"
+        >
+          Auto-Highlight Roots
+        </button>
+      </div> -->
+
+      <div class="progress-container">
+        <div class="progress-bar" id="highlight-progress"></div>
+        <div class="progress-text" id="highlight-stats">
+          0 / 0 words highlighted (0%)
+        </div>
+      </div>
+
+      <div class="highlighted-words empty" id="highlighted-words">
+        <button
+          class="highlight-btn"
+          id="auto-highlight-btn"
+          onclick="window.timedHighlightNextRoot(1000)"
+        >
+          Auto-Highlight Roots</button
+        >No words currently highlighted
+      </div>
+
+      <div class="torah-text zoomable" id="torah-text">
+        <!-- Genesis/Bereishit -->
+        <div class="book-section">
+          <div class="book-title">Genesis</div>
+          <div class="text-columns" id="genesis"></div>
+        </div>
+
+        <!-- Exodus/Shemot -->
+        <div class="book-section">
+          <div class="book-title">Exodus</div>
+          <div class="text-columns" id="exodus"></div>
+        </div>
+
+        <!-- Leviticus/Vayikra -->
+        <div class="book-section">
+          <div class="book-title">Leviticus</div>
+          <div class="text-columns" id="leviticus"></div>
+        </div>
+
+        <!-- Numbers/Bamidbar -->
+        <div class="book-section">
+          <div class="book-title">Numbers</div>
+          <div class="text-columns" id="numbers"></div>
+        </div>
+
+        <!-- Deuteronomy/Devarim -->
+        <div class="book-section">
+          <div class="book-title">Deuteronomy</div>
+          <div class="text-columns" id="deuteronomy"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="zoom-controls">
+      <div class="zoom-btn" id="zoom-in" title="Zoom In">+</div>
+      <div class="zoom-level" id="zoom-level">100%</div>
+      <div class="zoom-btn" id="zoom-out" title="Zoom Out">−</div>
+      <div class="zoom-btn" id="zoom-reset" title="Reset Zoom">⌂</div>
+    </div>
+
+    <script>
+      // Torah book page ranges (based on actual data structure)
+      const bookData = {
+        genesis: { start: 1, end: 60, name: 'Genesis' },
+        exodus: { start: 61, end: 111, name: 'Exodus' },
+        leviticus: { start: 111, end: 148, name: 'Leviticus' },
+        numbers: { start: 148, end: 200, name: 'Numbers' },
+        deuteronomy: { start: 200, end: 245, name: 'Deuteronomy' },
+      }
+
+      // Cache for loaded pages to avoid duplicate requests
+      const pageCache = new Map()
+      window.pc = pageCache
+
+      // Track highlighted search terms
+      const highlightedTerms = new Set()
+
+      // Zoom functionality
+      let currentZoom = 1
+      const minZoom = 0.3
+      const maxZoom = 5
+      const zoomStep = 0.2
+
+      function updateZoom(newZoom) {
+        currentZoom = Math.max(minZoom, Math.min(maxZoom, newZoom))
+        const torahText = document.getElementById('torah-text')
+        if (torahText) {
+          torahText.style.transform = `scale(${currentZoom})`
+        }
+
+        const zoomLevel = document.getElementById('zoom-level')
+        if (zoomLevel) {
+          zoomLevel.textContent = `${Math.round(currentZoom * 100)}%`
+        }
+      }
+
+      function initializeZoomControls() {
+        const zoomIn = document.getElementById('zoom-in')
+        const zoomOut = document.getElementById('zoom-out')
+        const zoomReset = document.getElementById('zoom-reset')
+
+        if (zoomIn) {
+          zoomIn.addEventListener('click', () => {
+            updateZoom(currentZoom + zoomStep)
+          })
+        }
+
+        if (zoomOut) {
+          zoomOut.addEventListener('click', () => {
+            updateZoom(currentZoom - zoomStep)
+          })
+        }
+
+        if (zoomReset) {
+          zoomReset.addEventListener('click', () => {
+            updateZoom(1)
+          })
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+          if (e.ctrlKey || e.metaKey) {
+            if (e.key === '=' || e.key === '+') {
+              e.preventDefault()
+              updateZoom(currentZoom + zoomStep)
+            } else if (e.key === '-') {
+              e.preventDefault()
+              updateZoom(currentZoom - zoomStep)
+            } else if (e.key === '0') {
+              e.preventDefault()
+              updateZoom(1)
+            }
+          }
+        })
+
+        // Mouse wheel zoom
+        const torahContainer = document.querySelector('.torah-container')
+        if (torahContainer) {
+          torahContainer.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault()
+              const delta = e.deltaY > 0 ? -zoomStep : zoomStep
+              updateZoom(currentZoom + delta)
+            }
+          })
+        }
+      }
+
+      async function loadPage(pageNumber) {
+        if (pageCache.has(pageNumber)) {
+          return pageCache.get(pageNumber)
+        }
+
+        try {
+          const response = await fetch(
+            `src/data/pages/torah/${pageNumber}.json`
+          )
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+          const pageData = await response.json()
+          pageCache.set(pageNumber, pageData)
+          return pageData
+        } catch (error) {
+          console.warn(`Failed to load page ${pageNumber}:`, error)
+          return []
+        }
+      }
+
+      function createTextFragmentFromText(fragment) {
+        // Clean the text but keep the Hebrew characters
+        const cleanText = fragment
+          .replace(/[\u0591-\u05C7]/g, '') // Remove nekudot for cleaner tiny display
+          .replace(/[׃#()]/g, '') // Remove punctuation marks
+          .replace(/פס/g, '') // Remove paragraph markers
+          // .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim()
+
+        if (!cleanText) return ''
+
+        // Return actual Hebrew text in a tiny font
+        return `<div class="text-fragment">${cleanText}</div>`
+      }
+
+      function processPageIntoColumns(pageData) {
+        const columns = []
+        let currentColumn = []
+        const maxLinesPerColumn = 25 // Approximate lines per column in a Torah scroll
+
+        pageData.forEach((line) => {
+          if (!line.text || line.text.length === 0) {
+            return // Skip empty lines
+          }
+
+          // Each line.text contains columns, each column contains fragments
+          line.text.forEach((textColumn) => {
+            textColumn.forEach((fragment) => {
+              if (fragment && fragment.trim()) {
+                const fragmentHtml = createTextFragmentFromText(fragment)
+                if (fragmentHtml) {
+                  currentColumn.push(fragmentHtml)
+
+                  // When we reach the max lines per column, start a new column
+                  if (currentColumn.length >= maxLinesPerColumn) {
+                    if (currentColumn.length > 0) {
+                      columns.push(
+                        `<div class="column">${currentColumn.join('')}</div>`
+                      )
+                      currentColumn = []
+                    }
+                  }
+                }
+              }
+            })
+          })
+        })
+
+        // Add any remaining fragments as the last column
+        if (currentColumn.length > 0) {
+          columns.push(`<div class="column">${currentColumn.join('')}</div>`)
+        }
+
+        return columns
+      }
+
+      async function createBookColumns(bookId, bookInfo) {
+        const container = document.getElementById(bookId)
+        container.innerHTML = `<div style="color: #8b4513; font-size: 12px; text-align: center; padding: 20px;">Loading ${bookInfo.name}...</div>`
+
+        let allColumnsHtml = ''
+        let totalColumns = 0
+        const totalPages = bookInfo.end - bookInfo.start + 1
+
+        try {
+          // Load pages for this book in smaller batches to avoid overwhelming the browser
+          const batchSize = 5
+          for (
+            let startPage = bookInfo.start;
+            startPage <= bookInfo.end;
+            startPage += batchSize
+          ) {
+            const endPage = Math.min(startPage + batchSize - 1, bookInfo.end)
+
+            // Load batch of pages in parallel
+            const pagePromises = []
+            for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
+              pagePromises.push(loadPage(pageNum))
+            }
+
+            const pagesData = await Promise.all(pagePromises)
+
+            // Process the loaded pages
+            pagesData.forEach((pageData, index) => {
+              const pageNum = startPage + index
+              const pageColumns = processPageIntoColumns(pageData)
+              allColumnsHtml += pageColumns.join('')
+              totalColumns += pageColumns.length
+            })
+
+            // Update progress
+            const progress = Math.round(
+              ((endPage - bookInfo.start + 1) / totalPages) * 100
+            )
+            container.innerHTML = `<div style="color: #8b4513; font-size: 12px; text-align: center; padding: 20px;">Loading ${bookInfo.name}... ${progress}%</div>`
+          }
+
+          container.innerHTML = allColumnsHtml
+          console.log(
+            `${bookInfo.name}: ${totalColumns} columns from pages ${bookInfo.start}-${bookInfo.end}`
+          )
+        } catch (error) {
+          console.error(`Failed to load ${bookInfo.name}:`, error)
+          container.innerHTML = `<div style="color: #cc6666; font-size: 12px; text-align: center; padding: 20px;">Failed to load ${bookInfo.name}</div>`
+        }
+      }
+
+      // Load all books sequentially to avoid overwhelming the browser
+      async function loadAllBooks() {
+        const loadingIndicator = document.createElement('div')
+        loadingIndicator.style.cssText = `
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: rgba(139, 69, 19, 0.9); 
+          color: white; 
+          padding: 10px 15px; 
+          border-radius: 5px; 
+          font-size: 14px;
+          z-index: 1000;
+        `
+        loadingIndicator.textContent = 'Loading Torah data...'
+        document.body.appendChild(loadingIndicator)
+
+        try {
+          for (const [bookId, bookInfo] of Object.entries(bookData)) {
+            loadingIndicator.textContent = `Loading ${bookInfo.name}...`
+            await createBookColumns(bookId, bookInfo)
+          }
+
+          loadingIndicator.textContent = 'Complete!'
+          setTimeout(() => {
+            document.body.removeChild(loadingIndicator)
+            // Initialize word count statistics after loading is complete
+            initializeStats()
+          }, 2000)
+        } catch (error) {
+          console.error('Failed to load Torah data:', error)
+          loadingIndicator.textContent = 'Failed to load data'
+          loadingIndicator.style.background = 'rgba(204, 102, 102, 0.9)'
+        }
+      }
+
+      // Start loading when page is ready
+      document.addEventListener('DOMContentLoaded', () => {
+        loadAllBooks()
+        initializeZoomControls()
+      })
+
+      // Global function to highlight text
+      window.highlightText = function (target, additive = false) {
+        if (!target || target.trim() === '') {
+          console.warn('Please provide a target word to highlight')
+          return
+        }
+
+        // Clear existing highlights only if not in additive mode
+        if (!additive) {
+          clearHighlights()
+        }
+
+        // Clean the target (remove nekudot for matching)
+        const cleanTarget = target
+          .replace(/[\u0591-\u05C7]/g, '') // Remove nekudot
+          .trim()
+
+        if (!cleanTarget) {
+          console.warn('Target word is empty after cleaning')
+          return
+        }
+
+        // Add term to highlighted terms set
+        highlightedTerms.add(target.trim())
+
+        let matchCount = 0
+
+        // Find all text fragments
+        const textFragments = document.querySelectorAll('.text-fragment')
+
+        textFragments.forEach((fragment) => {
+          // Skip if this fragment already has highlights and we're in additive mode
+          if (additive && fragment.querySelector('.highlight')) {
+            return
+          }
+
+          const originalText = fragment.textContent
+          const cleanText = originalText.replace(/[\u0591-\u05C7]/g, '') // Remove nekudot for matching
+
+          // Split text into words (Hebrew words are separated by spaces)
+          const words = cleanText.split(/\s+/)
+          const originalWords = originalText.split(/\s+/)
+
+          let hasMatch = false
+          let newHtml = ''
+
+          for (let i = 0; i < words.length; i++) {
+            const word = words[i]
+            const originalWord = originalWords[i] || word
+
+            // Check if this word contains the target (partial matching)
+            if (word.includes(cleanTarget)) {
+              // Highlight the entire word, not just the matching part
+              newHtml += '<span class="highlight">' + originalWord + '</span>'
+              hasMatch = true
+              matchCount++
+            } else {
+              newHtml += originalWord
+            }
+
+            // Add space between words (except for the last word)
+            if (i < words.length - 1) {
+              newHtml += ' '
+            }
+          }
+
+          if (hasMatch) {
+            fragment.innerHTML = newHtml
+          }
+        })
+
+        // Update statistics (count all current highlights, not just new ones)
+        const totalHighlights = document.querySelectorAll('.highlight').length
+        updateHighlightStats(totalHighlights)
+        updateHighlightedWordsDisplay()
+
+        console.log(
+          `Highlighted ${matchCount} new instances of "${target}". Total highlights: ${totalHighlights}`
+        )
+        return matchCount
+      }
+
+      // Function to clear all highlights
+      window.clearHighlights = function () {
+        const highlights = document.querySelectorAll('.highlight')
+        highlights.forEach((highlight) => {
+          const parent = highlight.parentNode
+          parent.replaceChild(
+            document.createTextNode(highlight.textContent),
+            highlight
+          )
+          parent.normalize() // Merge adjacent text nodes
+        })
+
+        // Also restore original text content for fragments that were modified
+        const textFragments = document.querySelectorAll('.text-fragment')
+        textFragments.forEach((fragment) => {
+          if (fragment.innerHTML !== fragment.textContent) {
+            // This fragment has HTML (highlights), restore from original text
+            const textOnly = fragment.textContent
+            fragment.textContent = textOnly
+          }
+        })
+
+        // Clear tracked terms
+        highlightedTerms.clear()
+
+        // Reset progress bar and statistics
+        updateHighlightStats(0)
+        updateHighlightedWordsDisplay()
+      }
+
+      // Function to count total words in the Torah
+      function countTotalWords() {
+        const textFragments = document.querySelectorAll('.text-fragment')
+        let totalWords = 0
+
+        textFragments.forEach((fragment) => {
+          const text = fragment.textContent
+          if (text && text.trim()) {
+            // Split by whitespace and count non-empty words
+            const words = text
+              .trim()
+              .split(/\s+/)
+              .filter((word) => word.length > 0)
+            totalWords += words.length
+          }
+        })
+
+        return totalWords
+      }
+
+      // Function to update highlight statistics and progress bar
+      function updateHighlightStats(highlightedCount = null) {
+        const statsDiv = document.getElementById('highlight-stats')
+        const progressBar = document.getElementById('highlight-progress')
+        if (!statsDiv || !progressBar) return
+
+        // If highlightedCount is not provided, count current highlights
+        if (highlightedCount === null) {
+          highlightedCount = document.querySelectorAll('.highlight').length
+        }
+
+        const totalWords = countTotalWords()
+        const percentage =
+          totalWords > 0 ? (highlightedCount / totalWords) * 100 : 0
+
+        // Update text
+        statsDiv.textContent = `${highlightedCount.toLocaleString()} / ${totalWords.toLocaleString()} words highlighted (${percentage.toFixed(
+          2
+        )}%)`
+
+        // Animate progress bar
+        progressBar.style.width = `${Math.min(percentage, 100)}%`
+
+        // Add visual feedback for progress changes
+        if (percentage > 0) {
+          progressBar.style.animation = 'none'
+          // Force reflow
+          progressBar.offsetHeight
+          progressBar.style.animation = null
+        }
+      }
+
+      // Initialize stats when content is loaded
+      function initializeStats() {
+        // Wait a bit for all content to be loaded
+        setTimeout(() => {
+          updateHighlightStats(0)
+          updateHighlightedWordsDisplay()
+        }, 1000)
+      }
+
+      // Function to update the highlighted words display
+      function updateHighlightedWordsDisplay() {
+        const wordsContainer = document.getElementById('highlighted-words')
+        if (!wordsContainer) return
+
+        if (highlightedTerms.size === 0) {
+          wordsContainer.className = 'highlighted-words empty'
+          wordsContainer.innerHTML = `<button class="highlight-btn" id="auto-highlight-btn" onclick="window.timedHighlightNextRoot(1000)">Auto-Highlight Roots</button> No words currently highlighted`
+        } else {
+          wordsContainer.className = 'highlighted-words'
+
+          const labelElement =
+            '<span class="highlighted-words-label">Highlighting:</span>'
+          const wordTags = Array.from(highlightedTerms)
+            .map((term) => `<span class="highlighted-word-tag">${term}</span>`)
+            .join('')
+
+          wordsContainer.innerHTML = labelElement + wordTags
+        }
+      }
+
+      const ROOTS = [
+        'אמר',
+        'היה',
+        'עשה',
+        'לקח',
+        'נתן',
+        'הלך',
+        'ראה',
+        'שמע',
+        'ידע',
+        'ישב',
+        'בוא',
+        'קרא',
+        'אכל',
+        'מצא',
+        'שים',
+        'עמד',
+        'צוה',
+        'עלה',
+        'יד',
+        'עין',
+        'לב',
+        'דרך',
+        'שם',
+        'מלך',
+        'ארץ',
+      ]
+      window.cur_root_i = 0
+      window.highlightNextRoot = function () {
+        if (window.cur_root_i >= ROOTS.length) {
+          console.warn('No more roots to highlight')
+          return
+        }
+        const root = ROOTS[window.cur_root_i]
+        const count = window.highlightText(root, true)
+        if (count > 0) {
+          window.cur_root_i++
+          console.log(`Highlighted ${count} instances of "${root}"`)
+        } else {
+          console.warn(`No instances of "${root}" found`)
+        }
+      }
+
+      window.timedHighlightNextRoot = function (intervalMs) {
+        if (window.highlightInterval) {
+          clearInterval(window.highlightInterval)
+        }
+        window.highlightInterval = setInterval(() => {
+          window.highlightNextRoot()
+          if (window.cur_root_i >= ROOTS.length) {
+            clearInterval(window.highlightInterval)
+            console.log('All roots highlighted')
+          }
+        }, intervalMs)
+      }
+    </script>
+  </body>
+</html>
+
